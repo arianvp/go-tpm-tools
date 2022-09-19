@@ -508,3 +508,19 @@ func (k *Key) trySetCertificateFromNvram(index uint32) error {
 	}
 	return k.SetCert(x509Cert)
 }
+
+// ActivateCredential proves that a key is generated on the same TPM as the EK.
+// This key must be a key created on the owner hierarchy.
+// ActivateCredential takes an EKpub-encrypted, server-generated secret and decrypts it
+// using the EKpriv.
+func (k *Key) ActivateCredential(rw io.ReadWriter, ekKey *Key, credentialBlob []byte, encryptedSecret []byte) (certInfo []byte, err error) {
+	ekSessionAuth, err := ekKey.session.Auth()
+	if err != nil {
+		return nil, fmt.Errorf("getting EK auth: %v", err)
+	}
+
+	return tpm2.ActivateCredentialUsingAuth(rw, []tpm2.AuthCommand{
+		{Session: tpm2.HandlePasswordSession, Attributes: tpm2.AttrContinueSession},
+		ekSessionAuth,
+	}, k.handle, ekKey.handle, credentialBlob[2:], encryptedSecret[2:])
+}
